@@ -1,0 +1,30 @@
+# AI Model Dependencies
+# Install these separately after base requirements for GPU support
+
+# Resemble Enhance
+# Clone from: https://github.com/resemble-ai/resemble-enhance
+resemble-enhance @ git+https://github.com/resemble-ai/resemble-enhance.git
+
+# Demucs (Meta/Facebook Research)
+demucs==4.0.1
+
+# DeepFilterNet
+deepfilternet==0.5.6
+df==0.5.1
+
+# Audio Super Resolution
+# Clone from: https://github.com/haoheliu/versatile_audio_super_resolution
+# audiosr @ git+https://github.com/haoheliu/versatile_audio_super_resolution.git
+
+# Additional dependencies for audio models
+speechbrain==0.5.16
+noisereduce==3.0.0
+asteroid==0.7.0
+julius==0.2.7
+
+# NVIDIA NeMo (optional, for advanced features)
+# nemo-toolkit[all]==1.22.0
+
+# Hugging Face Hub for model downloads
+huggingface-hub==0.20.3
+safetensors==0.4.2

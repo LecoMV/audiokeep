@@ -1,0 +1,121 @@
+version: '3.8'
+
+# Development environment without GPU requirements
+# Use this for local development on machines without NVIDIA GPU
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: audiokeep-postgres-dev
+    environment:
+      POSTGRES_USER: audiokeep
+      POSTGRES_PASSWORD: audiokeep_password
+      POSTGRES_DB: audiokeep
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    networks:
+      - audiokeep-network-dev
+
+  redis:
+    image: redis:7-alpine
+    container_name: audiokeep-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    networks:
+      - audiokeep-network-dev
+
+  minio:
+    image: minio/minio:latest
+    container_name: audiokeep-minio-dev
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data_dev:/data
+    networks:
+      - audiokeep-network-dev
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../deployment/docker/Dockerfile.backend.dev
+    container_name: audiokeep-backend-dev
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - DATABASE_URL=postgresql://audiokeep:audiokeep_password@postgres:5432/audiokeep
+      - REDIS_URL=redis://redis:6379/0
+      - S3_ENDPOINT=http://minio:9000
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - TORCH_DEVICE=cpu
+      - DEBUG=true
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - model_cache_dev:/app/models
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    networks:
+      - audiokeep-network-dev
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: ../deployment/docker/Dockerfile.backend.dev
+    container_name: audiokeep-celery-worker-dev
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=1
+    environment:
+      - DATABASE_URL=postgresql://audiokeep:audiokeep_password@postgres:5432/audiokeep
+      - REDIS_URL=redis://redis:6379/0
+      - S3_ENDPOINT=http://minio:9000
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - TORCH_DEVICE=cpu
+    volumes:
+      - ./backend:/app
+      - model_cache_dev:/app/models
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - backend
+    networks:
+      - audiokeep-network-dev
+
+  flower:
+    build:
+      context: ./backend
+      dockerfile: ../deployment/docker/Dockerfile.backend.dev
+    container_name: audiokeep-flower-dev
+    command: celery -A app.core.celery_app flower --port=5555
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery-worker
+    networks:
+      - audiokeep-network-dev
+
+volumes:
+  postgres_data_dev:
+  redis_data_dev:
+  minio_data_dev:
+  model_cache_dev:
+
+networks:
+  audiokeep-network-dev:
+    driver: bridge

@@ -1,0 +1,66 @@
+# Production Dockerfile for AudioKeep Backend with GPU support
+
+FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+
+# Prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
+    git \
+    ffmpeg \
+    libsndfile1 \
+    libsndfile1-dev \
+    libsamplerate0 \
+    libsamplerate0-dev \
+    curl \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip
+RUN python3.11 -m pip install --upgrade pip setuptools wheel
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+COPY requirements-models.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install PyTorch with CUDA support
+RUN pip install --no-cache-dir \
+    torch==2.2.0 \
+    torchaudio==2.2.0 \
+    torchvision==0.17.0 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# Install AI model dependencies
+RUN pip install --no-cache-dir -r requirements-models.txt
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/models /app/uploads /app/processed /app/logs
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV TORCH_HOME=/app/models
+ENV HF_HOME=/app/models/huggingface
+ENV CUDA_VISIBLE_DEVICES=0
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose port
+EXPOSE 8000
+
+# Run the application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
