@@ -117,6 +117,14 @@ async def root():
 # Include API router
 app.include_router(api_router, prefix=f"/api/{settings.API_VERSION}")
 
+# WebSocket endpoint for real-time job updates
+from app.api.websocket import websocket_job_status
+
+@app.websocket("/api/v1/ws/jobs/{job_id}")
+async def websocket_endpoint(websocket, job_id: str, token: str):
+    """WebSocket endpoint for real-time job status updates"""
+    await websocket_job_status(websocket, job_id, token)
+
 
 if __name__ == "__main__":
     import uvicorn
